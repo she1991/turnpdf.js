@@ -97,6 +97,8 @@ var PDFPageView = (function PDFPageViewClosure() {
     div.className = 'page';
     div.style.width = Math.floor(this.viewport.width) + 'px';
     div.style.height = Math.floor(this.viewport.height) + 'px';
+    //set the z-index of each page element as : totalPages - this.id
+    div.style.zIndex = Math.floor(options.annotationLayerFactory.pdfDocument.numPages - this.id);
     div.setAttribute('data-page-number', this.id);
     this.div = div;
 
