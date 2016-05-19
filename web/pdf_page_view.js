@@ -99,6 +99,8 @@ var PDFPageView = (function PDFPageViewClosure() {
     div.style.height = Math.floor(this.viewport.height) + 'px';
     //set the z-index of each page element as : totalPages - this.id
     div.style.zIndex = Math.floor(options.annotationLayerFactory.pdfDocument.numPages - this.id);
+    //Set the left style property of the page to be +5px its own width to accomodate the page flip
+    div.style.left = Math.floor(this.viewport.width + 10) + 'px';
     div.setAttribute('data-page-number', this.id);
     this.div = div;
 
