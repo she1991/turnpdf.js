@@ -55,8 +55,8 @@ var PDF_PAGE_FLIP = {
 			this.flipPageWidth = parseInt(this.flips[0].page.style.width, 10);
 			this.flipPageLeft = parseInt(this.flips[0].page.style.left, 10);
 			//Set book width and height
-			this.flipBookHeight = this.flipPageHeight + this.bookPaddingHeight;
-			this.flipBookWidth = (2*this.flipPageWidth) + this.bookPaddingWidth;
+			this.flipBookHeight = this.flipPageHeight;// + this.bookPaddingHeight;
+			this.flipBookWidth = (2*this.flipPageWidth);// + this.bookPaddingWidth;
 		
 			//Calculate flipPageY
 			this.flipPageY = (this.flipBookHeight - this.flipPageHeight)/2;
@@ -68,7 +68,7 @@ var PDF_PAGE_FLIP = {
 			this.flipCanvasContext = this.flipCanvas.getContext('2d');
 			console.log(this.flipCanvasContext);
 
-			this.flipCanvas.width = this.flipBookWidth * 2;//this.flipBookWidth + (this.CANVAS_PADDING * 2);
+			this.flipCanvas.width = this.flipBookWidth;//this.flipBookWidth + (this.CANVAS_PADDING * 2);
 			this.flipCanvas.height = this.flipBookHeight;//this.flipBookHeight + (this.CANVAS_PADDING * 2);
 			//Offset the canvas so its padding is evenly spread around the book
 			this.flipCanvas.style.top = '0px';//- this.CANVAS_PADDING  + 'px';
