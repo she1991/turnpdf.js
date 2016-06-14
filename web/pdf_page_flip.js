@@ -72,8 +72,7 @@ var PDF_PAGE_FLIP = {
 			this.flipCanvas.height = this.flipBookHeight;//this.flipBookHeight + (this.CANVAS_PADDING * 2);
 			//Offset the canvas so its padding is evenly spread around the book
 			this.flipCanvas.style.top = '0px';//- this.CANVAS_PADDING  + 'px';
-			this.flipCanvas.style.left = parseInt(this.flips[0].page.style.left, 10) - this.flipPageWidth + 500;//- this.CANVAS_PADDING + 'px';
-	
+			this.flipCanvas.style.left = parseInt(this.flips[0].page.style.left, 10) - this.flipPageWidth + 'px';
 			//Render page flip 60 times a second
 			setInterval( this.render.bind(this), 1000/60 );
 			//add event listeners to document
