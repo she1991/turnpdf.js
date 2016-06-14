@@ -257,6 +257,11 @@ html[dir='rtl'] #sidebarContent {
   left: 0;
   outline: none;
 }
+
+#pageflip {
+  position: absolute;
+}
+
 html[dir='ltr'] #viewerContainer {
   box-shadow: inset 1px 0 0 hsla(0,0%,100%,.05);
 }

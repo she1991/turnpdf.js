@@ -355,6 +355,8 @@ var PDFViewer = (function pdfViewer() {
             // XXX: Printing is semi-broken with auto fetch disabled.
             resolvePagesPromise();
           }
+          self.pageFlip = Object.create (PDF_PAGE_FLIP );
+          self.pageFlip.addPDFPages( self._pages );
         });
 
         var event = document.createEvent('CustomEvent');
