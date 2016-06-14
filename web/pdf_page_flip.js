@@ -154,10 +154,10 @@ var PDF_PAGE_FLIP = {
 		var foldWidth = ( this.flipPageWidth * 0.5 ) * ( 1 - flip.progress );
 		
 		// X position of the folded paper
-		var foldX = this.flipPageWidth * flip.progress + foldWidth + 100;
+		var foldX = this.flipPageWidth * flip.progress + foldWidth;
 		
 		// How far the page should outdent vertically due to perspective
-		var verticalOutdent = 20 * strength;
+		var verticalOutdent = 0;//20 * strength;
 		
 		// The maximum width of the left and right side shadows
 		var paperShadowWidth = ( this.flipPageWidth * 0.5 ) * Math.max( Math.min( 1 - flip.progress, 0.5 ), 0 );
@@ -166,7 +166,7 @@ var PDF_PAGE_FLIP = {
 		
 		
 		// Change page element width to match the x position of the fold
-		flip.page.style.width = Math.max(foldX, 0) + "px";
+		flip.page.style.width = Math.max(foldX - 10, 0) + "px";
 		
 		this.flipCanvasContext.save();
 		this.flipCanvasContext.translate( /*this.CANVAS_PADDING*/ + ( this.flipBookWidth / 2 ), this.flipPageY); //+ this.CANVAS_PADDING );
