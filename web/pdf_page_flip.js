@@ -84,12 +84,13 @@ var PDF_PAGE_FLIP = {
 	},
 	mouseMoveHandler : function( event ){
 		// Offset mouse position so that the top of the book spine is 0,0
-                this.mouse.x = event.clientX - ( this.flipBookWidth / 2 );
+                this.mouse.x = event.clientX - parseInt(this.flips[0].page.style.left, 10);// + this.flipCanvas.style.left;
                 this.mouse.y = event.clientY;
 	},
 	mouseDownHandler : function( event ){
+		console.log(this.mouse.x);
 		// Make sure the mouse pointer is inside of the book
-                if (Math.abs(this.mouse.x) < this.flipPageWidth) {
+                if (Math.abs(this.mouse.x) < parseInt(this.flips[0].page.style.left, 10)) {
                         if (this.mouse.x < 0 && this.page - 1 >= 0) {
                                 // We are on the left side, drag the previous page
                                 this.flips[this.page - 1].dragging = true;
