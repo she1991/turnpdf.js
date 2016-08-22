@@ -1259,7 +1259,7 @@ var JpxImage = (function JpxImageClosure() {
       for (j = 0; j < codingpasses; j++) {
         switch (currentCodingpassType) {
           case 0:
-            bitModel.runSignificancePropogationPass();
+            bitModel.runSignificancePropagationPass();
             break;
           case 1:
             bitModel.runMagnitudeRefinementPass();
@@ -1350,13 +1350,13 @@ var JpxImage = (function JpxImageClosure() {
         var subband = resolution.subbands[j];
         var gainLog2 = SubbandsGainLog2[subband.type];
 
-        // calulate quantization coefficient (Section E.1.1.1)
+        // calculate quantization coefficient (Section E.1.1.1)
         var delta = (reversible ? 1 :
           Math.pow(2, precision + gainLog2 - epsilon) * (1 + mu / 2048));
         var mb = (guardBits + epsilon - 1);
 
         // In the first resolution level, copyCoefficients will fill the
-        // whole array with coefficients. In the succeding passes,
+        // whole array with coefficients. In the succeeding passes,
         // copyCoefficients will consecutively fill in the values that belong
         // to the interleaved positions of the HL, LH, and HH coefficients.
         // The LL coefficients will then be interleaved in Transform.iterate().
@@ -1738,8 +1738,8 @@ var JpxImage = (function JpxImageClosure() {
         }
         neighborsSignificance[index] |= 0x80;
       },
-      runSignificancePropogationPass:
-        function BitModel_runSignificancePropogationPass() {
+      runSignificancePropagationPass:
+        function BitModel_runSignificancePropagationPass() {
         var decoder = this.decoder;
         var width = this.width, height = this.height;
         var coefficentsMagnitude = this.coefficentsMagnitude;

@@ -19,15 +19,17 @@
   if (typeof define === 'function' && define.amd) {
     define('pdfjs-web/pdf_page_view', ['exports',
       'pdfjs-web/ui_utils', 'pdfjs-web/pdf_rendering_queue',
-      'pdfjs-web/pdfjs'], factory);
+      'pdfjs-web/dom_events', 'pdfjs-web/pdfjs'], factory);
   } else if (typeof exports !== 'undefined') {
     factory(exports, require('./ui_utils.js'),
-      require('./pdf_rendering_queue.js'), require('./pdfjs.js'));
+      require('./pdf_rendering_queue.js'), require('./dom_events.js'),
+      require('./pdfjs.js'));
   } else {
     factory((root.pdfjsWebPDFPageView = {}), root.pdfjsWebUIUtils,
-      root.pdfjsWebPDFRenderingQueue, root.pdfjsWebPDFJS);
+      root.pdfjsWebPDFRenderingQueue, root.pdfjsWebDOMEvents,
+      root.pdfjsWebPDFJS);
   }
-}(this, function (exports, uiUtils, pdfRenderingQueue, pdfjsLib) {
+}(this, function (exports, uiUtils, pdfRenderingQueue, domEvents, pdfjsLib) {
 
 var CSS_UNITS = uiUtils.CSS_UNITS;
 var DEFAULT_SCALE = uiUtils.DEFAULT_SCALE;
@@ -41,6 +43,7 @@ var TEXT_LAYER_RENDER_DELAY = 200; // ms
 /**
  * @typedef {Object} PDFPageViewOptions
  * @property {HTMLDivElement} container - The viewer element.
+ * @property {EventBus} eventBus - The application event bus.
  * @property {number} id - The page unique ID (normally its number).
  * @property {number} scale - The page scale display.
  * @property {PageViewport} defaultViewport - The page viewport.
@@ -76,6 +79,7 @@ var PDFPageView = (function PDFPageViewClosure() {
     this.pdfPageRotate = defaultViewport.rotation;
     this.hasRestrictedScaling = false;
 
+    this.eventBus = options.eventBus || domEvents.getGlobalEventBus();
     this.renderingQueue = renderingQueue;
     this.textLayerFactory = textLayerFactory;
     this.annotationLayerFactory = annotationLayerFactory;
@@ -187,7 +191,6 @@ var PDFPageView = (function PDFPageViewClosure() {
       var isScalingRestricted = false;
       if (this.canvas && pdfjsLib.PDFJS.maxCanvasPixels > 0) {
         var outputScale = this.outputScale;
-        var pixelsInViewport = this.viewport.width * this.viewport.height;
         if (((Math.floor(this.viewport.width) * outputScale.sx) | 0) *
             ((Math.floor(this.viewport.height) * outputScale.sy) | 0) >
             pdfjsLib.PDFJS.maxCanvasPixels) {
@@ -200,13 +203,11 @@ var PDFPageView = (function PDFPageViewClosure() {
             (this.hasRestrictedScaling && isScalingRestricted)) {
           this.cssTransform(this.canvas, true);
 
-          var event = document.createEvent('CustomEvent');
-          event.initCustomEvent('pagerendered', true, true, {
+          this.eventBus.dispatch('pagerendered', {
+            source: this,
             pageNumber: this.id,
             cssTransform: true,
           });
-          this.div.dispatchEvent(event);
-
           return;
         }
         if (!this.zoomLayer) {
@@ -445,7 +446,12 @@ var PDFPageView = (function PDFPageViewClosure() {
           zoomLayerCanvas.width = 0;
           zoomLayerCanvas.height = 0;
 
-          div.removeChild(self.zoomLayer);
+          if (div.contains(self.zoomLayer)) {
+            // Prevent "Node was not found" errors if the `zoomLayer` was
+            // already removed. This may occur intermittently if the scale
+            // changes many times in very quick succession.
+            div.removeChild(self.zoomLayer);
+          }
           self.zoomLayer = null;
         }
 
@@ -454,12 +460,11 @@ var PDFPageView = (function PDFPageViewClosure() {
         if (self.onAfterDraw) {
           self.onAfterDraw();
         }
-        var event = document.createEvent('CustomEvent');
-        event.initCustomEvent('pagerendered', true, true, {
+        self.eventBus.dispatch('pagerendered', {
+          source: self,
           pageNumber: self.id,
           cssTransform: false,
         });
-        div.dispatchEvent(event);
 
         if (!error) {
           resolveRenderPromise(undefined);
@@ -502,12 +507,12 @@ var PDFPageView = (function PDFPageViewClosure() {
         function pdfPageRenderCallback() {
           pageViewDrawCallback(null);
           if (textLayer) {
-            self.pdfPage.getTextContent({ normalizeWhitespace: true }).then(
-              function textContentResolved(textContent) {
-                textLayer.setTextContent(textContent);
-                textLayer.render(TEXT_LAYER_RENDER_DELAY);
-              }
-            );
+            self.pdfPage.getTextContent({
+              normalizeWhitespace: true,
+            }).then(function textContentResolved(textContent) {
+              textLayer.setTextContent(textContent);
+              textLayer.render(TEXT_LAYER_RENDER_DELAY);
+            });
           }
         },
         function pdfPageRenderError(error) {
@@ -582,7 +587,7 @@ var PDFPageView = (function PDFPageViewClosure() {
         }, function(error) {
           console.error(error);
           // Tell the printEngine that rendering this canvas/page has failed.
-          // This will make the print proces stop.
+          // This will make the print process stop.
           if ('abort' in obj) {
             obj.abort();
           } else {

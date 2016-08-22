@@ -11,7 +11,7 @@ rendering PDFs.
 PDF.js is an open source project and always looking for more contributors. To
 get involved checkout:
 
-+ [Issue Reporting Guide](https://github.com/mozilla/pdf.js/blob/master/CONTRIBUTING.md)
++ [Issue Reporting Guide](https://github.com/mozilla/pdf.js/blob/master/.github/CONTRIBUTING.md)
 + [Code Contribution Guide](https://github.com/mozilla/pdf.js/wiki/Contributing)
 + [Frequently Asked Questions](https://github.com/mozilla/pdf.js/wiki/Frequently-Asked-Questions)
 + [Good Beginner Bugs](https://github.com/mozilla/pdf.js/issues?direction=desc&labels=5-good-beginner-bug&page=1&sort=created&state=open)
@@ -29,11 +29,15 @@ irc.mozilla.org.
 
 ### Browser Extensions
 
-#### Firefox and Seamonkey
+#### Firefox (and Seamonkey)
 
-PDF.js is built into version 19+ of Firefox, however the extension is still available:
+PDF.js is built into version 19+ of Firefox, however one extension is still available:
 
-+ [Development Version](http://mozilla.github.io/pdf.js/extensions/firefox/pdf.js.xpi) - This version is updated every time new code is merged into the PDF.js codebase. This should be quite stable but still might break from time to time. This version is also reported to work when installed as extension in Seamonkey 2.39.
++ [Development Version](http://mozilla.github.io/pdf.js/extensions/firefox/pdf.js.xpi) - This extension is mainly intended for developers/testers, and it is updated every time new code is merged into the PDF.js codebase. It should be quite stable, but might break from time to time.
+
+  + Please note that the extension is *not* guaranteed to be compatible with Firefox versions that are *older* than the current ESR version, see the [Release Calendar](https://wiki.mozilla.org/RapidRelease/Calendar#Past_branch_dates).
+
+  + The extension should also work in Seamonkey, provided that it is based on a Firefox version as above (see [Which version of Firefox does SeaMonkey 2.x correspond with?](https://wiki.mozilla.org/SeaMonkey/FAQ#General)), but we do *not* guarantee compatibility.
 
 #### Chrome
 
@@ -85,6 +89,13 @@ Both scripts are needed but only `pdf.js` needs to be included since `pdf.worker
 be loaded by `pdf.js`. If you want to support more browsers than Firefox you'll also need
 to include `compatibility.js` from `build/generic/web/`. The PDF.js files are large and
 should be minified for production.
+
+## Using PDF.js in a web application
+
+To use PDF.js in a web application you can choose to use a pre-built version of the library
+or to build it from source. We supply pre-built versions for usage with NPM and Bower under
+the `pdfjs-dist` name. For more information and examples please refer to the
+[wiki page](https://github.com/mozilla/pdf.js/wiki/Setup-pdf.js-in-a-website) on this subject.
 
 ## Learning
 

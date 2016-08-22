@@ -18,21 +18,6 @@
 
 var DEFAULT_URL = 'compressed.tracemonkey-pldi-09.pdf';
 
-//#if PRODUCTION
-//var pdfjsWebLibs = {
-//  pdfjsWebPDFJS: window.pdfjsDistBuildPdf
-//};
-//
-//(function () {
-//#expand __BUNDLE__
-//}).call(pdfjsWebLibs);
-//#endif
-
-//#if FIREFOX || MOZCENTRAL
-//// FIXME the l10n.js file in the Firefox extension needs global FirefoxCom.
-//window.FirefoxCom = pdfjsWebLibs.pdfjsWebFirefoxCom.FirefoxCom;
-//#endif
-
 //#if CHROME
 //(function rewriteUrlClosure() {
 //  // Run this code outside DOMContentLoaded to make sure that the URL
@@ -50,12 +35,29 @@ var DEFAULT_URL = 'compressed.tracemonkey-pldi-09.pdf';
 //})();
 //#endif
 
+//#if PRODUCTION
+//var pdfjsWebLibs = {
+//  pdfjsWebPDFJS: window.pdfjsDistBuildPdf
+//};
+//
+//(function () {
+//#expand __BUNDLE__
+//}).call(pdfjsWebLibs);
+//#endif
+
+//#if FIREFOX || MOZCENTRAL
+//// FIXME the l10n.js file in the Firefox extension needs global FirefoxCom.
+//window.FirefoxCom = pdfjsWebLibs.pdfjsWebFirefoxCom.FirefoxCom;
+//#endif
+
 function getViewerConfiguration() {
   return {
     appContainer: document.body,
     mainContainer: document.getElementById('viewerContainer'),
     viewerContainer:  document.getElementById('viewer'),
+    eventBus: null, // using global event bus with DOM events
     toolbar: {
+      container: document.getElementById('toolbarViewer'),
       numPages: document.getElementById('numPages'),
       pageNumber: document.getElementById('pageNumber'),
       scaleSelectContainer: document.getElementById('scaleSelectContainer'),
@@ -79,16 +81,16 @@ function getViewerConfiguration() {
       toggleButton: document.getElementById('secondaryToolbarToggle'),
       presentationModeButton:
         document.getElementById('secondaryPresentationMode'),
-      openFile: document.getElementById('secondaryOpenFile'),
-      print: document.getElementById('secondaryPrint'),
-      download: document.getElementById('secondaryDownload'),
-      viewBookmark: document.getElementById('secondaryViewBookmark'),
-      firstPage: document.getElementById('firstPage'),
-      lastPage: document.getElementById('lastPage'),
-      pageRotateCw: document.getElementById('pageRotateCw'),
-      pageRotateCcw: document.getElementById('pageRotateCcw'),
+      openFileButton: document.getElementById('secondaryOpenFile'),
+      printButton: document.getElementById('secondaryPrint'),
+      downloadButton: document.getElementById('secondaryDownload'),
+      viewBookmarkButton: document.getElementById('secondaryViewBookmark'),
+      firstPageButton: document.getElementById('firstPage'),
+      lastPageButton: document.getElementById('lastPage'),
+      pageRotateCwButton: document.getElementById('pageRotateCw'),
+      pageRotateCcwButton: document.getElementById('pageRotateCcw'),
+      toggleHandToolButton: document.getElementById('toggleHandTool'),
       documentPropertiesButton: document.getElementById('documentProperties'),
-      toggleHandTool: document.getElementById('toggleHandTool'),
     },
     fullscreen: {
       contextFirstPage: document.getElementById('contextFirstPage'),
@@ -159,6 +161,7 @@ function getViewerConfiguration() {
     },
     printContainer: document.getElementById('printContainer'),
     openFileInputName: 'fileInput',
+    debuggerScriptPath: './debugger.js',
   };
 }
 
@@ -166,9 +169,14 @@ function webViewerLoad() {
   var config = getViewerConfiguration();
 //#if !PRODUCTION
   require.config({paths: {'pdfjs': '../src', 'pdfjs-web': '.'}});
-  require(['pdfjs-web/app'], function (web) {
-    window.PDFViewerApplication = web.PDFViewerApplication;
-    web.PDFViewerApplication.run(config);
+  require(['pdfjs-web/pdfjs'], function () {
+    // Ensure that src/main_loader.js has loaded all the necessary dependencies
+    // *before* the viewer loads, to prevent issues in browsers relying on e.g.
+    // the Promise/URL polyfill in src/shared/util.js (fixes issue 7448).
+    require(['pdfjs-web/app', 'mozPrintCallback_polyfill.js'], function (web) {
+      window.PDFViewerApplication = web.PDFViewerApplication;
+      web.PDFViewerApplication.run(config);
+    });
   });
 //#else
 //window.PDFViewerApplication = pdfjsWebLibs.pdfjsWebApp.PDFViewerApplication;

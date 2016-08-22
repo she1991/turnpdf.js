@@ -38,6 +38,7 @@ var isArray = sharedUtil.isArray;
 var createObjectURL = sharedUtil.createObjectURL;
 var shadow = sharedUtil.shadow;
 var warn = sharedUtil.warn;
+var isSpace = sharedUtil.isSpace;
 var Dict = corePrimitives.Dict;
 var isDict = corePrimitives.isDict;
 var Jbig2Image = coreJbig2.Jbig2Image;
@@ -926,7 +927,7 @@ var JpegStream = (function JpegStreamClosure() {
 
       // checking if values needs to be transformed before conversion
       if (this.forceRGB && this.dict && isArray(this.dict.get('Decode'))) {
-        var decodeArr = this.dict.get('Decode');
+        var decodeArr = this.dict.getArray('Decode');
         var bitsPerComponent = this.dict.get('BitsPerComponent') || 8;
         var decodeArrLength = decodeArr.length;
         var transform = new Int32Array(decodeArrLength);
@@ -1066,8 +1067,8 @@ var Jbig2Stream = (function Jbig2StreamClosure() {
 
     var jbig2Image = new Jbig2Image();
 
-    var chunks = [], xref = this.dict.xref;
-    var decodeParams = xref.fetchIfRef(this.dict.get('DecodeParms'));
+    var chunks = [];
+    var decodeParams = this.dict.getArray('DecodeParms');
 
     // According to the PDF specification, DecodeParms can be either
     // a dictionary, or an array whose elements are dictionaries.
@@ -1076,7 +1077,7 @@ var Jbig2Stream = (function Jbig2StreamClosure() {
         warn('JBIG2 - \'DecodeParms\' array with multiple elements ' +
              'not supported.');
       }
-      decodeParams = xref.fetchIfRef(decodeParams[0]);
+      decodeParams = decodeParams[0];
     }
     if (decodeParams && decodeParams.has('JBIG2Globals')) {
       var globalsStream = decodeParams.get('JBIG2Globals');
@@ -1146,11 +1147,6 @@ var DecryptStream = (function DecryptStreamClosure() {
 })();
 
 var Ascii85Stream = (function Ascii85StreamClosure() {
-  // Checks if ch is one of the following characters: SPACE, TAB, CR or LF.
-  function isSpace(ch) {
-    return (ch === 0x20 || ch === 0x09 || ch === 0x0D || ch === 0x0A);
-  }
-
   function Ascii85Stream(str, maybeLength) {
     this.str = str;
     this.dict = str.dict;

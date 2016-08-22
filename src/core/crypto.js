@@ -1779,17 +1779,15 @@ var CipherTransformFactory = (function CipherTransformFactoryClosure() {
       pdfAlgorithm = new PDF17();
     }
 
-    if (pdfAlgorithm) {
-      if (pdfAlgorithm.checkUserPassword(password, userValidationSalt,
-                                         userPassword)) {
-        return pdfAlgorithm.getUserKey(password, userKeySalt, userEncryption);
-      } else if (password.length && pdfAlgorithm.checkOwnerPassword(password,
-                                                   ownerValidationSalt,
-                                                   uBytes,
-                                                   ownerPassword)) {
-        return pdfAlgorithm.getOwnerKey(password, ownerKeySalt, uBytes,
-                                        ownerEncryption);
-      }
+    if (pdfAlgorithm.checkUserPassword(password, userValidationSalt,
+                                        userPassword)) {
+      return pdfAlgorithm.getUserKey(password, userKeySalt, userEncryption);
+    } else if (password.length && pdfAlgorithm.checkOwnerPassword(password,
+                                                  ownerValidationSalt,
+                                                  uBytes,
+                                                  ownerPassword)) {
+      return pdfAlgorithm.getOwnerKey(password, ownerKeySalt, uBytes,
+                                      ownerEncryption);
     }
 
     return null;
@@ -1911,7 +1909,7 @@ var CipherTransformFactory = (function CipherTransformFactoryClosure() {
 
   function CipherTransformFactory(dict, fileId, password) {
     var filter = dict.get('Filter');
-    if (!isName(filter) || filter.name !== 'Standard') {
+    if (!isName(filter, 'Standard')) {
       error('unknown encryption method');
     }
     this.dict = dict;

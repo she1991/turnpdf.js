@@ -1,7 +1,7 @@
 /* globals PDFJS, expect, it, describe, Promise, beforeAll,
            InvalidPDFException, MissingPDFException, StreamType, FontType,
            PDFDocumentProxy, PasswordException, PasswordResponses, afterAll,
-           PDFPageProxy, createPromiseCapability, beforeEach, afterEach */
+           PDFPageProxy, createPromiseCapability, afterEach */
 
 'use strict';
 
@@ -360,6 +360,16 @@ describe('api', function() {
         done.fail(reason);
       });
     });
+    it('gets invalid page index', function (done) {
+      var ref = { num: 3, gen: 0 }; // Reference to a font dictionary.
+      var promise = doc.getPageIndex(ref);
+      promise.then(function () {
+        done.fail('shall fail for invalid page reference.');
+      }, function (data) {
+        expect(data instanceof Error).toEqual(true);
+        done();
+      });
+    });
 
     it('gets destinations, from /Dests dictionary', function(done) {
       var promise = doc.getDestinations();
@@ -487,7 +497,8 @@ describe('api', function() {
         done.fail(reason);
       });
     });
-    it('gets attachments', function(done) {
+
+    it('gets non-existent attachments', function(done) {
       var promise = doc.getAttachments();
       promise.then(function (data) {
         expect(data).toEqual(null);
@@ -496,6 +507,25 @@ describe('api', function() {
         done.fail(reason);
       });
     });
+    it('gets attachments', function(done) {
+      var url = new URL('../pdfs/bug766138.pdf', window.location).href;
+      var loadingTask = PDFJS.getDocument(url);
+      var promise = loadingTask.promise.then(function (pdfDoc) {
+        return pdfDoc.getAttachments();
+      });
+      promise.then(function (data) {
+        var attachment = data['Press Quality.joboptions'];
+        expect(attachment.filename).toEqual('Press Quality.joboptions');
+        expect(attachment.content instanceof Uint8Array).toBeTruthy();
+        expect(attachment.content.length).toEqual(30098);
+
+        loadingTask.destroy();
+        done();
+      }).catch(function (reason) {
+        done.fail(reason);
+      });
+    });
+
     it('gets javascript', function(done) {
       var promise = doc.getJavaScript();
       promise.then(function (data) {
@@ -741,12 +771,14 @@ describe('api', function() {
     });
     it('gets text content', function (done) {
       var defaultPromise = page.getTextContent();
-      var normalizeWhitespacePromise = page.getTextContent({
-        normalizeWhitespace: true });
+      var parametersPromise = page.getTextContent({
+        normalizeWhitespace: true,
+        disableCombineTextItems: true,
+      });
 
       var promises = [
         defaultPromise,
-        normalizeWhitespacePromise
+        parametersPromise,
       ];
       Promise.all(promises).then(function (data) {
         expect(!!data[0].items).toEqual(true);

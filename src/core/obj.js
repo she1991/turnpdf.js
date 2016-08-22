@@ -56,6 +56,7 @@ var isName = corePrimitives.isName;
 var isCmd = corePrimitives.isCmd;
 var isDict = corePrimitives.isDict;
 var isRef = corePrimitives.isRef;
+var isRefsEqual = corePrimitives.isRefsEqual;
 var isStream = corePrimitives.isStream;
 var CipherTransformFactory = coreCrypto.CipherTransformFactory;
 var Lexer = coreParser.Lexer;
@@ -93,8 +94,7 @@ var Catalog = (function CatalogClosure() {
         var type = stream.dict.get('Type');
         var subtype = stream.dict.get('Subtype');
 
-        if (isName(type) && isName(subtype) &&
-            type.name === 'Metadata' && subtype.name === 'XML') {
+        if (isName(type, 'Metadata') && isName(subtype, 'XML')) {
           // XXX: This should examine the charset the XML document defines,
           // however since there are currently no real means to decode
           // arbitrary charsets, let's just hope that the author of the PDF
@@ -172,7 +172,7 @@ var Catalog = (function CatalogClosure() {
         var title = outlineDict.get('Title');
         var flags = outlineDict.get('F') || 0;
 
-        var color = outlineDict.get('C'), rgbColor = blackColor;
+        var color = outlineDict.getArray('C'), rgbColor = blackColor;
         // We only need to parse the color when it's valid, and non-default.
         if (isArray(color) && color.length === 3 &&
             (color[0] !== 0 || color[1] !== 0 || color[2] !== 0)) {
@@ -303,7 +303,7 @@ var Catalog = (function CatalogClosure() {
           assert(isDict(labelDict), 'The PageLabel is not a dictionary.');
 
           var type = labelDict.get('Type');
-          assert(!type || (isName(type) && type.name === 'PageLabel'),
+          assert(!type || isName(type, 'PageLabel'),
                  'Invalid type in PageLabel dictionary.');
 
           var s = labelDict.get('S');
@@ -381,7 +381,7 @@ var Catalog = (function CatalogClosure() {
       var javaScript = [];
       function appendIfJavaScriptDict(jsDict) {
         var type = jsDict.get('S');
-        if (!isName(type) || type.name !== 'JavaScript') {
+        if (!isName(type, 'JavaScript')) {
           return;
         }
         var js = jsDict.get('JS');
@@ -409,11 +409,11 @@ var Catalog = (function CatalogClosure() {
       var openactionDict = this.catDict.get('OpenAction');
       if (isDict(openactionDict, 'Action')) {
         var actionType = openactionDict.get('S');
-        if (isName(actionType) && actionType.name === 'Named') {
+        if (isName(actionType, 'Named')) {
           // The named Print action is not a part of the PDF 1.7 specification,
           // but is supported by many PDF readers/writers (including Adobe's).
           var action = openactionDict.get('N');
-          if (isName(action) && action.name === 'Print') {
+          if (isName(action, 'Print')) {
             javaScript.push('print({});');
           }
         } else {
@@ -522,7 +522,7 @@ var Catalog = (function CatalogClosure() {
       return capability.promise;
     },
 
-    getPageIndex: function Catalog_getPageIndex(ref) {
+    getPageIndex: function Catalog_getPageIndex(pageRef) {
       // The page tree nodes have the count of all the leaves below them. To get
       // how many pages are before we just have to walk up the tree and keep
       // adding the count of siblings to the left of the node.
@@ -531,15 +531,21 @@ var Catalog = (function CatalogClosure() {
         var total = 0;
         var parentRef;
         return xref.fetchAsync(kidRef).then(function (node) {
+          if (isRefsEqual(kidRef, pageRef) && !isDict(node, 'Page') &&
+              !(isDict(node) && !node.has('Type') && node.has('Contents'))) {
+            throw new Error('The reference does not point to a /Page Dict.');
+          }
           if (!node) {
             return null;
           }
+          assert(isDict(node), 'node must be a Dict.');
           parentRef = node.getRaw('Parent');
           return node.getAsync('Parent');
         }).then(function (parent) {
           if (!parent) {
             return null;
           }
+          assert(isDict(parent), 'parent must be a Dict.');
           return parent.getAsync('Kids');
         }).then(function (kids) {
           if (!kids) {
@@ -549,7 +555,7 @@ var Catalog = (function CatalogClosure() {
           var found = false;
           for (var i = 0; i < kids.length; i++) {
             var kid = kids[i];
-            assert(isRef(kid), 'kids must be a ref');
+            assert(isRef(kid), 'kid must be a Ref.');
             if (kid.num === kidRef.num) {
               found = true;
               break;
@@ -585,7 +591,7 @@ var Catalog = (function CatalogClosure() {
         });
       }
 
-      return next(ref);
+      return next(pageRef);
     }
   };
 
@@ -963,13 +969,15 @@ var XRef = (function XRefClosure() {
       var dict;
       for (i = 0, ii = trailers.length; i < ii; ++i) {
         stream.pos = trailers[i];
-        var parser = new Parser(new Lexer(stream), true, this);
+        var parser = new Parser(new Lexer(stream), /* allowStreams = */ true,
+                                /* xref = */ this, /* recoveryMode = */ true);
         var obj = parser.getObj();
         if (!isCmd(obj, 'trailer')) {
           continue;
         }
         // read the trailer dictionary
-        if (!isDict(dict = parser.getObj())) {
+        dict = parser.getObj();
+        if (!isDict(dict)) {
           continue;
         }
         // taking the first one with 'ID'
@@ -1175,6 +1183,11 @@ var XRef = (function XRefClosure() {
       // read stream objects for cache
       for (i = 0; i < n; ++i) {
         entries.push(parser.getObj());
+        // The ObjStm should not contain 'endobj'. If it's present, skip over it
+        // to support corrupt PDFs (fixes issue 5241, bug 898610, bug 1037816).
+        if (isCmd(parser.buf1, 'endobj')) {
+          parser.shift();
+        }
         num = nums[i];
         var entry = this.entries[num];
         if (entry && entry.offset === tableOffset && entry.gen === i) {

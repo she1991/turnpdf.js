@@ -18,12 +18,12 @@
 (function (root, factory) {
   'use strict';
   if (typeof define === 'function' && define.amd) {
-    define('pdfjs-dist/web/pdf.components', ['exports', 'pdfjs-dist/build/pdf'],
+    define('pdfjs-dist/web/pdf_viewer', ['exports', 'pdfjs-dist/build/pdf'],
       factory);
   } else if (typeof exports !== 'undefined') {
     factory(exports, require('../build/pdf.js'));
   } else {
-    factory((root.pdfjsDistWebPDFComponents = {}), root.pdfjsDistBuildPdf);
+    factory((root.pdfjsDistWebPDFViewer = {}), root.pdfjsDistBuildPdf);
   }
 }(this, function (exports, pdfjsLib) {
   'use strict';
@@ -50,6 +50,9 @@
   PDFJS.DefaultAnnotationLayerFactory =
     pdfViewerLibs.pdfjsWebAnnotationLayerBuilder.DefaultAnnotationLayerFactory;
   PDFJS.PDFHistory = pdfViewerLibs.pdfjsWebPDFHistory.PDFHistory;
+  PDFJS.PDFFindController =
+    pdfViewerLibs.pdfjsWebPDFFindController.PDFFindController;
+  PDFJS.EventBus = pdfViewerLibs.pdfjsWebUIUtils.EventBus;
 
   PDFJS.DownloadManager = pdfViewerLibs.pdfjsWebDownloadManager.DownloadManager;
   PDFJS.ProgressBar = pdfViewerLibs.pdfjsWebUIUtils.ProgressBar;

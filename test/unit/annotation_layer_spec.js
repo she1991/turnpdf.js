@@ -15,11 +15,46 @@ describe('Annotation layer', function() {
     }
   };
 
+  var annotationFactory;
+
+  beforeAll(function (done) {
+    annotationFactory = new AnnotationFactory();
+    done();
+  });
+
+  afterAll(function () {
+    annotationFactory = null;
+  });
+
+  describe('AnnotationFactory', function () {
+    it('should handle missing /Subtype', function () {
+      var annotationDict = new Dict();
+      annotationDict.set('Type', Name.get('Annot'));
+
+      var xrefMock = new XrefMock([annotationDict]);
+      var annotationRef = new Ref(1, 0);
+
+      var annotation = annotationFactory.create(xrefMock, annotationRef);
+      var data = annotation.data;
+      expect(data.annotationType).toBeUndefined();
+    });
+  });
+
   describe('Annotation', function() {
+    var dict, ref;
+
+    beforeAll(function (done) {
+      dict = new Dict();
+      ref = new Ref(1, 0);
+      done();
+    });
+
+    afterAll(function () {
+      dict = ref = null;
+    });
+
     it('should set and get flags', function() {
-      var dict = new Dict();
-      dict.set('Subtype', '');
-      var annotation = new Annotation({ dict: dict, ref: 0 });
+      var annotation = new Annotation({ dict: dict, ref: ref });
       annotation.setFlags(13);
 
       expect(annotation.hasFlag(AnnotationFlag.INVISIBLE)).toEqual(true);
@@ -29,81 +64,63 @@ describe('Annotation layer', function() {
     });
 
     it('should be viewable and not printable by default', function() {
-      var dict = new Dict();
-      dict.set('Subtype', '');
-      var annotation = new Annotation({ dict: dict, ref: 0 });
+      var annotation = new Annotation({ dict: dict, ref: ref });
 
       expect(annotation.viewable).toEqual(true);
       expect(annotation.printable).toEqual(false);
     });
 
     it('should set and get a valid rectangle', function() {
-      var dict = new Dict();
-      dict.set('Subtype', '');
-      var annotation = new Annotation({ dict: dict, ref: 0 });
+      var annotation = new Annotation({ dict: dict, ref: ref });
       annotation.setRectangle([117, 694, 164.298, 720]);
 
       expect(annotation.rectangle).toEqual([117, 694, 164.298, 720]);
     });
 
     it('should not set and get an invalid rectangle', function() {
-      var dict = new Dict();
-      dict.set('Subtype', '');
-      var annotation = new Annotation({ dict: dict, ref: 0 });
+      var annotation = new Annotation({ dict: dict, ref: ref });
       annotation.setRectangle([117, 694, 164.298]);
 
       expect(annotation.rectangle).toEqual([0, 0, 0, 0]);
     });
 
     it('should reject a color if it is not an array', function() {
-      var dict = new Dict();
-      dict.set('Subtype', '');
-      var annotation = new Annotation({ dict: dict, ref: 0 });
+      var annotation = new Annotation({ dict: dict, ref: ref });
       annotation.setColor('red');
 
       expect(annotation.color).toEqual(new Uint8Array([0, 0, 0]));
     });
 
     it('should set and get a transparent color', function() {
-      var dict = new Dict();
-      dict.set('Subtype', '');
-      var annotation = new Annotation({ dict: dict, ref: 0 });
+      var annotation = new Annotation({ dict: dict, ref: ref });
       annotation.setColor([]);
 
       expect(annotation.color).toEqual(null);
     });
 
     it('should set and get a grayscale color', function() {
-      var dict = new Dict();
-      dict.set('Subtype', '');
-      var annotation = new Annotation({ dict: dict, ref: 0 });
+      var annotation = new Annotation({ dict: dict, ref: ref });
       annotation.setColor([0.4]);
 
       expect(annotation.color).toEqual(new Uint8Array([102, 102, 102]));
     });
 
     it('should set and get an RGB color', function() {
-      var dict = new Dict();
-      dict.set('Subtype', '');
-      var annotation = new Annotation({ dict: dict, ref: 0 });
+      var annotation = new Annotation({ dict: dict, ref: ref });
       annotation.setColor([0, 0, 1]);
 
       expect(annotation.color).toEqual(new Uint8Array([0, 0, 255]));
     });
 
     it('should set and get a CMYK color', function() {
-      var dict = new Dict();
-      dict.set('Subtype', '');
-      var annotation = new Annotation({ dict: dict, ref: 0 });
+      var annotation = new Annotation({ dict: dict, ref: ref });
       annotation.setColor([0.1, 0.92, 0.84, 0.02]);
 
       expect(annotation.color).toEqual(new Uint8Array([233, 59, 47]));
     });
 
     it('should not set and get an invalid color', function() {
-      var dict = new Dict();
-      dict.set('Subtype', '');
-      var annotation = new Annotation({ dict: dict, ref: 0 });
+      var annotation = new Annotation({ dict: dict, ref: ref });
       annotation.setColor([0.4, 0.6]);
 
       expect(annotation.color).toEqual(new Uint8Array([0, 0, 0]));
@@ -185,17 +202,6 @@ describe('Annotation layer', function() {
   });
 
   describe('LinkAnnotation', function() {
-    var annotationFactory;
-
-    beforeAll(function (done) {
-      annotationFactory = new AnnotationFactory();
-      done();
-    });
-
-    afterAll(function () {
-      annotationFactory = null;
-    });
-
     it('should correctly parse a URI action', function() {
       var actionDict = new Dict();
       actionDict.set('Type', Name.get('Action'));
@@ -268,8 +274,9 @@ describe('Annotation layer', function() {
       var actionDict = new Dict();
       actionDict.set('Type', Name.get('Action'));
       actionDict.set('S', Name.get('GoToR'));
-      actionDict.set('F', '../../0021/002156/215675E.pdf');
-      actionDict.set('D', '15');
+      actionDict.set('F', '../../0013/001346/134685E.pdf');
+      actionDict.set('D', '4.3');
+      actionDict.set('NewWindow', true);
 
       var annotationDict = new Dict();
       annotationDict.set('Type', Name.get('Annot'));
@@ -283,7 +290,58 @@ describe('Annotation layer', function() {
       var data = annotation.data;
       expect(data.annotationType).toEqual(AnnotationType.LINK);
 
-      expect(data.url).toBeUndefined();
+      expect(data.url).toBeUndefined(); // ../../0013/001346/134685E.pdf#4.3
+      expect(data.dest).toBeUndefined();
+      expect(data.newWindow).toEqual(true);
+    });
+
+    it('should correctly parse a GoToR action, with named destination',
+        function() {
+      var actionDict = new Dict();
+      actionDict.set('Type', Name.get('Action'));
+      actionDict.set('S', Name.get('GoToR'));
+      actionDict.set('F', 'http://www.example.com/test.pdf');
+      actionDict.set('D', '15');
+
+      var annotationDict = new Dict();
+      annotationDict.set('Type', Name.get('Annot'));
+      annotationDict.set('Subtype', Name.get('Link'));
+      annotationDict.set('A', actionDict);
+
+      var xrefMock = new XrefMock([annotationDict]);
+      var annotationRef = new Ref(495, 0);
+
+      var annotation = annotationFactory.create(xrefMock, annotationRef);
+      var data = annotation.data;
+      expect(data.annotationType).toEqual(AnnotationType.LINK);
+
+      expect(data.url).toEqual('http://www.example.com/test.pdf#nameddest=15');
+      expect(data.dest).toBeUndefined();
+      expect(data.newWindow).toBeFalsy();
+    });
+
+    it('should correctly parse a GoToR action, with explicit destination array',
+        function() {
+      var actionDict = new Dict();
+      actionDict.set('Type', Name.get('Action'));
+      actionDict.set('S', Name.get('GoToR'));
+      actionDict.set('F', 'http://www.example.com/test.pdf');
+      actionDict.set('D', [14, Name.get('XYZ'), null, 298.043, null]);
+
+      var annotationDict = new Dict();
+      annotationDict.set('Type', Name.get('Annot'));
+      annotationDict.set('Subtype', Name.get('Link'));
+      annotationDict.set('A', actionDict);
+
+      var xrefMock = new XrefMock([annotationDict]);
+      var annotationRef = new Ref(489, 0);
+
+      var annotation = annotationFactory.create(xrefMock, annotationRef);
+      var data = annotation.data;
+      expect(data.annotationType).toEqual(AnnotationType.LINK);
+
+      expect(data.url).toEqual('http://www.example.com/test.pdf#' +
+                               '[14,{"name":"XYZ"},null,298.043,null]');
       expect(data.dest).toBeUndefined();
       expect(data.newWindow).toBeFalsy();
     });
@@ -356,6 +414,34 @@ describe('Annotation layer', function() {
       var annotation = annotations[0];
       expect(annotation.file.filename).toEqual('Test.txt');
       expect(annotation.file.content).toEqual(stringToBytes('Test attachment'));
+    });
+  });
+
+  describe('PopupAnnotation', function() {
+    it('should inherit the parent flags when the Popup is not viewable, ' +
+       'but the parent is (PR 7352)', function () {
+      var parentDict = new Dict();
+      parentDict.set('Type', Name.get('Annot'));
+      parentDict.set('Subtype', Name.get('Text'));
+      parentDict.set('F', 28); // viewable
+
+      var popupDict = new Dict();
+      popupDict.set('Type', Name.get('Annot'));
+      popupDict.set('Subtype', Name.get('Popup'));
+      popupDict.set('F', 25); // not viewable
+      popupDict.set('Parent', parentDict);
+
+      var xrefMock = new XrefMock([popupDict]);
+      var popupRef = new Ref(13, 0);
+
+      var popupAnnotation = annotationFactory.create(xrefMock, popupRef);
+      var data = popupAnnotation.data;
+      expect(data.annotationType).toEqual(AnnotationType.POPUP);
+
+      // Should not modify the `annotationFlags` returned e.g. through the API.
+      expect(data.annotationFlags).toEqual(25);
+      // The Popup should inherit the `viewable` property of the parent.
+      expect(popupAnnotation.viewable).toEqual(true);
     });
   });
 });

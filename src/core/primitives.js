@@ -267,8 +267,8 @@ var RefSetCache = (function RefSetCacheClosure() {
   return RefSetCache;
 })();
 
-function isName(v) {
-  return v instanceof Name;
+function isName(v, name) {
+  return v instanceof Name && (name === undefined || v.name === name);
 }
 
 function isCmd(v, cmd) {
@@ -276,18 +276,16 @@ function isCmd(v, cmd) {
 }
 
 function isDict(v, type) {
-  if (!(v instanceof Dict)) {
-    return false;
-  }
-  if (!type) {
-    return true;
-  }
-  var dictType = v.get('Type');
-  return isName(dictType) && dictType.name === type;
+  return v instanceof Dict &&
+         (type === undefined || isName(v.get('Type'), type));
 }
 
 function isRef(v) {
   return v instanceof Ref;
+}
+
+function isRefsEqual(v1, v2) {
+  return v1.num === v2.num && v1.gen === v2.gen;
 }
 
 function isStream(v) {
@@ -304,5 +302,6 @@ exports.isCmd = isCmd;
 exports.isDict = isDict;
 exports.isName = isName;
 exports.isRef = isRef;
+exports.isRefsEqual = isRefsEqual;
 exports.isStream = isStream;
 }));

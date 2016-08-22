@@ -18,34 +18,30 @@
 (function (root, factory) {
   if (typeof define === 'function' && define.amd) {
     define('pdfjs/core/fonts', ['exports', 'pdfjs/shared/util',
-      'pdfjs/core/primitives', 'pdfjs/core/stream', 'pdfjs/core/parser',
-      'pdfjs/core/glyphlist', 'pdfjs/core/charsets',
+      'pdfjs/core/primitives', 'pdfjs/core/stream', 'pdfjs/core/glyphlist',
       'pdfjs/core/font_renderer', 'pdfjs/core/encodings',
       'pdfjs/core/standard_fonts', 'pdfjs/core/unicode',
       'pdfjs/core/type1_parser', 'pdfjs/core/cff_parser'], factory);
   } else if (typeof exports !== 'undefined') {
     factory(exports, require('../shared/util.js'), require('./primitives.js'),
-      require('./stream.js'), require('./parser.js'),
-      require('./glyphlist.js'), require('./charsets.js'),
+      require('./stream.js'), require('./glyphlist.js'),
       require('./font_renderer.js'), require('./encodings.js'),
       require('./standard_fonts.js'), require('./unicode.js'),
       require('./type1_parser.js'), require('./cff_parser.js'));
   } else {
     factory((root.pdfjsCoreFonts = {}), root.pdfjsSharedUtil,
-      root.pdfjsCorePrimitives, root.pdfjsCoreStream, root.pdfjsCoreParser,
-      root.pdfjsCoreGlyphList, root.pdfjsCoreCharsets,
+      root.pdfjsCorePrimitives, root.pdfjsCoreStream, root.pdfjsCoreGlyphList,
       root.pdfjsCoreFontRenderer, root.pdfjsCoreEncodings,
       root.pdfjsCoreStandardFonts, root.pdfjsCoreUnicode,
       root.pdfjsCoreType1Parser, root.pdfjsCoreCFFParser);
   }
-}(this, function (exports, sharedUtil, corePrimitives, coreStream, coreParser,
-                  coreGlyphList, coreCharsets, coreFontRenderer,
-                  coreEncodings, coreStandardFonts, coreUnicode,
-                  coreType1Parser, coreCFFParser) {
+}(this, function (exports, sharedUtil, corePrimitives, coreStream,
+                  coreGlyphList, coreFontRenderer, coreEncodings,
+                  coreStandardFonts, coreUnicode, coreType1Parser,
+                  coreCFFParser) {
 
 var FONT_IDENTITY_MATRIX = sharedUtil.FONT_IDENTITY_MATRIX;
 var FontType = sharedUtil.FontType;
-var Util = sharedUtil.Util;
 var assert = sharedUtil.assert;
 var bytesToString = sharedUtil.bytesToString;
 var error = sharedUtil.error;
@@ -55,24 +51,18 @@ var isInt = sharedUtil.isInt;
 var isNum = sharedUtil.isNum;
 var readUint32 = sharedUtil.readUint32;
 var shadow = sharedUtil.shadow;
-var stringToBytes = sharedUtil.stringToBytes;
 var string32 = sharedUtil.string32;
 var warn = sharedUtil.warn;
 var MissingDataException = sharedUtil.MissingDataException;
+var isSpace = sharedUtil.isSpace;
 var Stream = coreStream.Stream;
-var Lexer = coreParser.Lexer;
 var getGlyphsUnicode = coreGlyphList.getGlyphsUnicode;
 var getDingbatsGlyphsUnicode = coreGlyphList.getDingbatsGlyphsUnicode;
-var ISOAdobeCharset = coreCharsets.ISOAdobeCharset;
-var ExpertCharset = coreCharsets.ExpertCharset;
-var ExpertSubsetCharset = coreCharsets.ExpertSubsetCharset;
 var FontRendererFactory = coreFontRenderer.FontRendererFactory;
-var WinAnsiEncoding = coreEncodings.WinAnsiEncoding;
 var StandardEncoding = coreEncodings.StandardEncoding;
 var MacRomanEncoding = coreEncodings.MacRomanEncoding;
 var SymbolSetEncoding = coreEncodings.SymbolSetEncoding;
 var ZapfDingbatsEncoding = coreEncodings.ZapfDingbatsEncoding;
-var ExpertEncoding = coreEncodings.ExpertEncoding;
 var getEncoding = coreEncodings.getEncoding;
 var getStdFontMap = coreStandardFonts.getStdFontMap;
 var getNonStdFontMap = coreStandardFonts.getNonStdFontMap;
@@ -193,6 +183,25 @@ function getFontType(type, subtype) {
     default:
       return FontType.UNKNOWN;
   }
+}
+
+// Some bad PDF generators, e.g. Scribus PDF, include glyph names
+// in a 'uniXXXX' format -- attempting to recover proper ones.
+function recoverGlyphName(name, glyphsUnicodeMap) {
+  if (glyphsUnicodeMap[name] !== undefined) {
+    return name;
+  }
+  // The glyph name is non-standard, trying to recover.
+  var unicode = getUnicodeForGlyph(name, glyphsUnicodeMap);
+  if (unicode !== -1) {
+    for (var key in glyphsUnicodeMap) {
+      if (glyphsUnicodeMap[key] === unicode) {
+        return key;
+      }
+    }
+  }
+  info('Unable to recover a standard glyph name for: ' + name);
+  return name;
 }
 
 var Glyph = (function GlyphClosure() {
@@ -448,12 +457,14 @@ var ProblematicCharRanges = new Int32Array([
   0x0600, 0x0780,
   0x08A0, 0x10A0,
   0x1780, 0x1800,
+  0x1C00, 0x1C50,
   // General punctuation chars.
   0x2000, 0x2010,
   0x2011, 0x2012,
   0x2028, 0x2030,
   0x205F, 0x2070,
   0x25CC, 0x25CD,
+  0x3000, 0x3001,
   // Chars that is used in complex-script shaping.
   0xAA60, 0xAA80,
   // Specials Unicode block.
@@ -2070,7 +2081,7 @@ var Font = (function FontClosure() {
         }
       }
 
-      function sanitizeTTPrograms(fpgm, prep, cvt) {
+      function sanitizeTTPrograms(fpgm, prep, cvt, maxFunctionDefs) {
         var ttContext = {
           functionsDefined: [],
           functionsUsed: [],
@@ -2274,26 +2285,6 @@ var Font = (function FontClosure() {
         }
         return false;
       }
-
-      // Some bad PDF generators, e.g. Scribus PDF, include glyph names
-      // in a 'uniXXXX' format -- attempting to recover proper ones.
-      function recoverGlyphName(name, glyphsUnicodeMap) {
-        if (glyphsUnicodeMap[name] !== undefined) {
-          return name;
-        }
-        // The glyph name is non-standard, trying to recover.
-        var unicode = getUnicodeForGlyph(name, glyphsUnicodeMap);
-        if (unicode !== -1) {
-          for (var key in glyphsUnicodeMap) {
-            if (glyphsUnicodeMap[key] === unicode) {
-              return key;
-            }
-          }
-        }
-        warn('Unable to recover a standard glyph name for: ' + name);
-        return name;
-      }
-
 
       if (properties.type === 'CIDFontType2') {
         var cidToGidMap = properties.cidToGidMap || [];
@@ -2647,7 +2638,7 @@ var Font = (function FontClosure() {
       // Naming tables
       builder.addTable('name', createNameTable(fontName));
 
-      // PostScript informations
+      // PostScript information
       builder.addTable('post', createPostTable(properties));
 
       return builder.toArray();
@@ -2659,7 +2650,7 @@ var Font = (function FontClosure() {
       }
 
       // trying to estimate space character width
-      var possibleSpaceReplacements = ['space', 'minus', 'one', 'i'];
+      var possibleSpaceReplacements = ['space', 'minus', 'one', 'i', 'I'];
       var width;
       for (var i = 0, ii = possibleSpaceReplacements.length; i < ii; i++) {
         var glyphName = possibleSpaceReplacements[i];
@@ -2827,7 +2818,8 @@ var ErrorFont = (function ErrorFontClosure() {
  * @param {Object} properties Font properties object.
  * @param {Object} builtInEncoding The encoding contained within the actual font
  * data.
- * @param {Array} Array of glyph names where the index is the glyph ID.
+ * @param {Array} glyphNames Array of glyph names where the index is the
+ * glyph ID.
  * @returns {Object} A char code to glyph ID map.
  */
 function type1FontGlyphMapping(properties, builtInEncoding, glyphNames) {
@@ -2867,11 +2859,21 @@ function type1FontGlyphMapping(properties, builtInEncoding, glyphNames) {
   }
 
   // Lastly, merge in the differences.
-  var differences = properties.differences;
+  var differences = properties.differences, glyphsUnicodeMap;
   if (differences) {
     for (charCode in differences) {
       var glyphName = differences[charCode];
       glyphId = glyphNames.indexOf(glyphName);
+
+      if (glyphId === -1) {
+        if (!glyphsUnicodeMap) {
+          glyphsUnicodeMap = getGlyphsUnicode();
+        }
+        var standardGlyphName = recoverGlyphName(glyphName, glyphsUnicodeMap);
+        if (standardGlyphName !== glyphName) {
+          glyphId = glyphNames.indexOf(standardGlyphName);
+        }
+      }
       if (glyphId >= 0) {
         charCodeToGlyphId[charCode] = glyphId;
       } else {
@@ -2897,7 +2899,7 @@ var Type1Font = (function Type1FontClosure() {
       }
       if (j >= signatureLength) { // `signature` found, skip over whitespace.
         i += j;
-        while (i < streamBytesLength && Lexer.isSpace(streamBytes[i])) {
+        while (i < streamBytesLength && isSpace(streamBytes[i])) {
           i++;
         }
         found = true;
@@ -3013,7 +3015,7 @@ var Type1Font = (function Type1FontClosure() {
                           (pfbHeader[3] << 8) | pfbHeader[2];
     }
 
-    // Get the data block containing glyphs and subrs informations
+    // Get the data block containing glyphs and subrs information
     var headerBlock = getHeaderBlock(file, headerBlockLength);
     headerBlockLength = headerBlock.length;
     var headerBlockParser = new Type1Parser(headerBlock.stream, false,

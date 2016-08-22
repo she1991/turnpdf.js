@@ -600,6 +600,8 @@ var PDFDocumentProxy = (function PDFDocumentProxyClosure() {
  * @typedef {Object} getTextContentParameters
  * @param {boolean} normalizeWhitespace - replaces all occurrences of
  *   whitespace with standard spaces (0x20). The default value is `false`.
+ * @param {boolean} disableCombineTextItems - do not attempt to combine
+ *   same line {@link TextItem}'s. The default value is `false`.
  */
 
 /**
@@ -810,7 +812,7 @@ var PDFPageProxy = (function PDFPageProxyClosure() {
             return;
           }
           stats.time('Rendering');
-          internalRenderTask.initalizeGraphics(transparency);
+          internalRenderTask.initializeGraphics(transparency);
           internalRenderTask.operatorListChanged();
         },
         function pageDisplayReadPromiseError(reason) {
@@ -891,11 +893,12 @@ var PDFPageProxy = (function PDFPageProxyClosure() {
      * object that represent the page text content.
      */
     getTextContent: function PDFPageProxy_getTextContent(params) {
-      var normalizeWhitespace = (params && params.normalizeWhitespace) || false;
-
       return this.transport.messageHandler.sendWithPromise('GetTextContent', {
         pageIndex: this.pageNumber - 1,
-        normalizeWhitespace: normalizeWhitespace,
+        normalizeWhitespace: (params && params.normalizeWhitespace === true ?
+                              true : /* Default */ false),
+        combineTextItems: (params && params.disableCombineTextItems === true ?
+                           false : /* Default */ true),
       });
     },
 
@@ -1683,7 +1686,12 @@ var WorkerTransport = (function WorkerTransportClosure() {
     },
 
     getPageIndex: function WorkerTransport_getPageIndexByRef(ref) {
-      return this.messageHandler.sendWithPromise('GetPageIndex', { ref: ref });
+      return this.messageHandler.sendWithPromise('GetPageIndex', { ref: ref }).
+        then(function (pageIndex) {
+          return pageIndex;
+        }, function (reason) {
+          return Promise.reject(new Error(reason));
+        });
     },
 
     getAnnotations: function WorkerTransport_getAnnotations(pageIndex, intent) {
@@ -1937,8 +1945,8 @@ var InternalRenderTask = (function InternalRenderTaskClosure() {
 
   InternalRenderTask.prototype = {
 
-    initalizeGraphics:
-        function InternalRenderTask_initalizeGraphics(transparency) {
+    initializeGraphics:
+        function InternalRenderTask_initializeGraphics(transparency) {
 
       if (this.cancelled) {
         return;

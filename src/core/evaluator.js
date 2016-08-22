@@ -148,7 +148,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
       function NativeImageDecoder_isSupported(image, xref, res) {
     var cs = ColorSpace.parse(image.dict.get('ColorSpace', 'CS'), xref, res);
     return (cs.name === 'DeviceGray' || cs.name === 'DeviceRGB') &&
-           cs.isDefaultDecode(image.dict.get('Decode', 'D'));
+           cs.isDefaultDecode(image.dict.getArray('Decode', 'D'));
   };
   /**
    * Checks if the image can be decoded by the browser.
@@ -157,7 +157,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
       function NativeImageDecoder_isDecodable(image, xref, res) {
     var cs = ColorSpace.parse(image.dict.get('ColorSpace', 'CS'), xref, res);
     return (cs.numComps === 1 || cs.numComps === 3) &&
-           cs.isDefaultDecode(image.dict.get('Decode', 'D'));
+           cs.isDefaultDecode(image.dict.getArray('Decode', 'D'));
   };
 
   function PartialEvaluator(pdfManager, xref, handler, pageIndex,
@@ -287,7 +287,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
 
         var groupSubtype = group.get('S');
         var colorSpace;
-        if (isName(groupSubtype) && groupSubtype.name === 'Transparency') {
+        if (isName(groupSubtype, 'Transparency')) {
           groupOptions.isolated = (group.get('I') || false);
           groupOptions.knockout = (group.get('K') || false);
           colorSpace = (group.has('CS') ?
@@ -347,7 +347,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         var height = dict.get('Height', 'H');
         var bitStrideLength = (width + 7) >> 3;
         var imgArray = image.getBytes(bitStrideLength * height);
-        var decode = dict.get('Decode', 'D');
+        var decode = dict.getArray('Decode', 'D');
         var inverseDecode = (!!decode && decode[0] > 0);
 
         imgData = PDFImage.createMask(imgArray, width, height,
@@ -582,7 +582,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
             gStateObj.push([key, value]);
             break;
           case 'SMask':
-            if (isName(value) && value.name === 'None') {
+            if (isName(value, 'None')) {
               gStateObj.push([key, false]);
               break;
             }
@@ -662,8 +662,8 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         return errorFont();
       }
 
-      // We are holding font.translated references just for fontRef that are not
-      // dictionaries (Dict). See explanation below.
+      // We are holding `font.translated` references just for `fontRef`s that
+      // are not actually `Ref`s, but rather `Dict`s. See explanation below.
       if (font.translated) {
         return font.translated;
       }
@@ -672,7 +672,12 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
 
       var preEvaluatedFont = this.preEvaluateFont(font, xref);
       var descriptor = preEvaluatedFont.descriptor;
-      var fontID = fontRef.num + '_' + fontRef.gen;
+
+      var fontRefIsRef = isRef(fontRef), fontID;
+      if (fontRefIsRef) {
+        fontID = fontRef.toString();
+      }
+
       if (isDict(descriptor)) {
         if (!descriptor.fontAliases) {
           descriptor.fontAliases = Object.create(null);
@@ -682,36 +687,53 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         var hash = preEvaluatedFont.hash;
         if (fontAliases[hash]) {
           var aliasFontRef = fontAliases[hash].aliasRef;
-          if (aliasFontRef && this.fontCache.has(aliasFontRef)) {
+          if (fontRefIsRef && aliasFontRef &&
+              this.fontCache.has(aliasFontRef)) {
             this.fontCache.putAlias(fontRef, aliasFontRef);
             return this.fontCache.get(fontRef);
           }
-        }
-
-        if (!fontAliases[hash]) {
+        } else {
           fontAliases[hash] = {
             fontID: Font.getFontID()
           };
         }
 
-        fontAliases[hash].aliasRef = fontRef;
+        if (fontRefIsRef) {
+          fontAliases[hash].aliasRef = fontRef;
+        }
         fontID = fontAliases[hash].fontID;
       }
 
-      // Workaround for bad PDF generators that don't reference fonts
-      // properly, i.e. by not using an object identifier.
-      // Check if the fontRef is a Dict (as opposed to a standard object),
-      // in which case we don't cache the font and instead reference it by
-      // fontName in font.loadedName below.
-      var fontRefIsDict = isDict(fontRef);
-      if (!fontRefIsDict) {
+      // Workaround for bad PDF generators that reference fonts incorrectly,
+      // where `fontRef` is a `Dict` rather than a `Ref` (fixes bug946506.pdf).
+      // In this case we should not put the font into `this.fontCache` (which is
+      // a `RefSetCache`), since it's not meaningful to use a `Dict` as a key.
+      //
+      // However, if we don't cache the font it's not possible to remove it
+      // when `cleanup` is triggered from the API, which causes issues on
+      // subsequent rendering operations (see issue7403.pdf).
+      // A simple workaround would be to just not hold `font.translated`
+      // references in this case, but this would force us to unnecessarily load
+      // the same fonts over and over.
+      //
+      // Instead, we cheat a bit by attempting to use a modified `fontID` as a
+      // key in `this.fontCache`, to allow the font to be cached.
+      // NOTE: This works because `RefSetCache` calls `toString()` on provided
+      //       keys. Also, since `fontRef` is used when getting cached fonts,
+      //       we'll not accidentally match fonts cached with the `fontID`.
+      if (fontRefIsRef) {
         this.fontCache.put(fontRef, fontCapability.promise);
+      } else {
+        if (!fontID) {
+          fontID = (this.uniquePrefix || 'F_') + (++this.idCounters.obj);
+        }
+        this.fontCache.put('id_' + fontID, fontCapability.promise);
       }
+      assert(fontID, 'The "fontID" must be defined.');
 
       // Keep track of each font we translated so the caller can
       // load them asynchronously before calling display on a page.
-      font.loadedName = 'g_' + this.pdfManager.docId + '_f' + (fontRefIsDict ?
-        fontName.replace(/\W/g, '') : fontID);
+      font.loadedName = 'g_' + this.pdfManager.docId + '_f' + fontID;
 
       font.translated = fontCapability.promise;
 
@@ -788,7 +810,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                                        dict, operatorList, task);
         } else if (typeNum === SHADING_PATTERN) {
           var shading = dict.get('Shading');
-          var matrix = dict.get('Matrix');
+          var matrix = dict.getArray('Matrix');
           pattern = Pattern.parseShading(shading, matrix, xref, resources,
                                          this.handler);
           operatorList.addOp(fn, pattern.getIR());
@@ -868,8 +890,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                 assert(isStream(xobj), 'XObject should be a stream');
 
                 var type = xobj.dict.get('Subtype');
-                assert(isName(type),
-                  'XObject should have a Name subtype');
+                assert(isName(type), 'XObject should have a Name subtype');
 
                 if (type.name === 'Form') {
                   stateManager.save();
@@ -1110,7 +1131,8 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
     getTextContent:
         function PartialEvaluator_getTextContent(stream, task, resources,
                                                  stateManager,
-                                                 normalizeWhitespace) {
+                                                 normalizeWhitespace,
+                                                 combineTextItems) {
 
       stateManager = (stateManager || new StateManager(new TextState()));
 
@@ -1396,13 +1418,13 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
           textState = stateManager.state;
           var fn = operation.fn;
           args = operation.args;
-          var advance;
+          var advance, diff;
 
           switch (fn | 0) {
             case OPS.setFont:
               flushTextContentItem();
               textState.fontSize = args[1];
-              next(handleSetFont(args[0].name));
+              next(handleSetFont(args[0].name, null));
               return;
             case OPS.setTextRise:
               flushTextContentItem();
@@ -1421,7 +1443,8 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
               var isSameTextLine = !textState.font ? false :
                 ((textState.font.vertical ? args[0] : args[1]) === 0);
               advance = args[0] - args[1];
-              if (isSameTextLine && textContentItem.initialized &&
+              if (combineTextItems &&
+                  isSameTextLine && textContentItem.initialized &&
                   advance > 0 &&
                   advance <= textContentItem.fakeMultiSpaceMax) {
                 textState.translateTextLineMatrix(args[0], args[1]);
@@ -1429,8 +1452,8 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                   (args[0] - textContentItem.lastAdvanceWidth);
                 textContentItem.height +=
                   (args[1] - textContentItem.lastAdvanceHeight);
-                var diff = (args[0] - textContentItem.lastAdvanceWidth) -
-                           (args[1] - textContentItem.lastAdvanceHeight);
+                diff = (args[0] - textContentItem.lastAdvanceWidth) -
+                       (args[1] - textContentItem.lastAdvanceHeight);
                 addFakeSpaces(diff, textContentItem.str);
                 break;
               }
@@ -1450,6 +1473,25 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
               textState.carriageReturn();
               break;
             case OPS.setTextMatrix:
+              // Optimization to treat same line movement as advance.
+              advance = textState.calcTextLineMatrixAdvance(
+                args[0], args[1], args[2], args[3], args[4], args[5]);
+              if (combineTextItems &&
+                  advance !== null && textContentItem.initialized &&
+                  advance.value > 0 &&
+                  advance.value <= textContentItem.fakeMultiSpaceMax) {
+                textState.translateTextLineMatrix(advance.width,
+                                                  advance.height);
+                textContentItem.width +=
+                  (advance.width - textContentItem.lastAdvanceWidth);
+                textContentItem.height +=
+                  (advance.height - textContentItem.lastAdvanceHeight);
+                diff = (advance.width - textContentItem.lastAdvanceWidth) -
+                       (advance.height - textContentItem.lastAdvanceHeight);
+                addFakeSpaces(diff, textContentItem.str);
+                break;
+              }
+
               flushTextContentItem();
               textState.setTextMatrix(args[0], args[1], args[2], args[3],
                 args[4], args[5]);
@@ -1559,8 +1601,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
               assert(isStream(xobj), 'XObject should be a stream');
 
               var type = xobj.dict.get('Subtype');
-              assert(isName(type),
-                'XObject should have a Name subtype');
+              assert(isName(type), 'XObject should have a Name subtype');
 
               if ('Form' !== type.name) {
                 xobjsCache.key = name;
@@ -1569,14 +1610,15 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
               }
 
               stateManager.save();
-              var matrix = xobj.dict.get('Matrix');
+              var matrix = xobj.dict.getArray('Matrix');
               if (isArray(matrix) && matrix.length === 6) {
                 stateManager.transform(matrix);
               }
 
               next(self.getTextContent(xobj, task,
                    xobj.dict.get('Resources') || resources, stateManager,
-                   normalizeWhitespace).then(function (formTextContent) {
+                   normalizeWhitespace, combineTextItems).then(
+                function (formTextContent) {
                   Util.appendToArray(textContent.items, formTextContent.items);
                   Util.extendObj(textContent.styles, formTextContent.styles);
                   stateManager.restore();
@@ -1590,21 +1632,17 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
               var dictName = args[0];
               var extGState = resources.get('ExtGState');
 
-              if (!isDict(extGState) || !extGState.has(dictName.name)) {
+              if (!isDict(extGState) || !isName(dictName)) {
                 break;
               }
-
-              var gsStateMap = extGState.get(dictName.name);
-              var gsStateFont = null;
-              for (var key in gsStateMap) {
-                if (key === 'Font') {
-                  assert(!gsStateFont);
-                  gsStateFont = gsStateMap[key];
-                }
+              var gState = extGState.get(dictName.name);
+              if (!isDict(gState)) {
+                break;
               }
-              if (gsStateFont) {
-                textState.fontSize = gsStateFont[1];
-                next(handleSetFont(gsStateFont[0]));
+              var gStateFont = gState.get('Font');
+              if (gStateFont) {
+                textState.fontSize = gStateFont[1];
+                next(handleSetFont(null, gStateFont[0]));
                 return;
               }
               break;
@@ -1736,7 +1774,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
       // the differences array only contains adobe standard or symbol set names,
       // in pratice it seems better to always try to create a toUnicode
       // map based of the default encoding.
-      var toUnicode, charcode;
+      var toUnicode, charcode, glyphName;
       if (!properties.composite /* is simple font */) {
         toUnicode = [];
         var encoding = properties.defaultEncoding.slice();
@@ -1744,12 +1782,18 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         // Merge in the differences array.
         var differences = properties.differences;
         for (charcode in differences) {
-          encoding[charcode] = differences[charcode];
+          glyphName = differences[charcode];
+          if (glyphName === '.notdef') {
+            // Skip .notdef to prevent rendering errors, e.g. boxes appearing
+            // where there should be spaces (fixes issue5256.pdf).
+            continue;
+          }
+          encoding[charcode] = glyphName;
         }
         var glyphsUnicodeMap = getGlyphsUnicode();
         for (charcode in encoding) {
           // a) Map the character code to a character name.
-          var glyphName = encoding[charcode];
+          glyphName = encoding[charcode];
           // b) Look up the character name in the Adobe Glyph List (see the
           //    Bibliography) to obtain the corresponding Unicode value.
           if (glyphName === '') {
@@ -2101,7 +2145,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         if (isName(encoding)) {
           hash.update(encoding.name);
         } else if (isRef(encoding)) {
-          hash.update(encoding.num + '_' + encoding.gen);
+          hash.update(encoding.toString());
         } else if (isDict(encoding)) {
           var keys = encoding.getKeys();
           for (var i = 0, ii = keys.length; i < ii; i++) {
@@ -2109,7 +2153,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
             if (isName(entry)) {
               hash.update(entry.name);
             } else if (isRef(entry)) {
-              hash.update(entry.num + '_' + entry.gen);
+              hash.update(entry.toString());
             } else if (isArray(entry)) { // 'Differences' entry.
               // Ideally we should check the contents of the array, but to avoid
               // parsing it here and then again in |extractDataStructures|,
@@ -2166,7 +2210,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
           // is a tagged pdf. Create a barbebones one to get by.
           descriptor = new Dict(null);
           descriptor.set('FontName', Name.get(type));
-          descriptor.set('FontBBox', dict.get('FontBBox'));
+          descriptor.set('FontBBox', dict.getArray('FontBBox'));
         } else {
           // Before PDF 1.5 if the font was one of the base 14 fonts, having a
           // FontDescriptor was not required.
@@ -2208,7 +2252,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
 
       // According to the spec if 'FontDescriptor' is declared, 'FirstChar',
       // 'LastChar' and 'Widths' should exist too, but some PDF encoders seem
-      // to ignore this rule when a variant of a standart font is used.
+      // to ignore this rule when a variant of a standard font is used.
       // TODO Fill the width array depending on which of the base font this is
       // a variant.
       var firstChar = (dict.get('FirstChar') || 0);
@@ -2268,10 +2312,10 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         composite: composite,
         wideChars: composite,
         fixedPitch: false,
-        fontMatrix: (dict.get('FontMatrix') || FONT_IDENTITY_MATRIX),
+        fontMatrix: (dict.getArray('FontMatrix') || FONT_IDENTITY_MATRIX),
         firstChar: firstChar || 0,
         lastChar: (lastChar || maxCharIndex),
-        bbox: descriptor.get('FontBBox'),
+        bbox: descriptor.getArray('FontBBox'),
         ascent: descriptor.get('Ascent'),
         descent: descriptor.get('Descent'),
         xHeight: descriptor.get('XHeight'),
@@ -2546,6 +2590,30 @@ var TextState = (function TextStateClosure() {
       var m = this.textLineMatrix;
       m[4] = m[0] * x + m[2] * y + m[4];
       m[5] = m[1] * x + m[3] * y + m[5];
+    },
+    calcTextLineMatrixAdvance:
+        function TextState_calcTextLineMatrixAdvance(a, b, c, d, e, f) {
+      var font = this.font;
+      if (!font) {
+        return null;
+      }
+      var m = this.textLineMatrix;
+      if (!(a === m[0] && b === m[1] && c === m[2] && d === m[3])) {
+        return null;
+      }
+      var txDiff = e - m[4], tyDiff = f - m[5];
+      if ((font.vertical && txDiff !== 0) || (!font.vertical && tyDiff !== 0)) {
+        return null;
+      }
+      var tx, ty, denominator = a * d - b * c;
+      if (font.vertical) {
+        tx = -tyDiff * c / denominator;
+        ty = tyDiff * a / denominator;
+      } else {
+        tx = txDiff * d / denominator;
+        ty = -txDiff * b / denominator;
+      }
+      return { width: tx, height: ty, value: (font.vertical ? ty : tx), };
     },
     calcRenderMatrix: function TextState_calcRendeMatrix(ctm) {
       // 9.4.4 Text Space Details
