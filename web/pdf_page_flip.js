@@ -31,6 +31,9 @@ var PDF_PAGE_FLIP = {
 
 	addPDFPages : function (PDFPages){
 		//Create flip objects for each of these pages
+		//Two pages in one flip element.
+		//'page' property holds the div on the front side of the flip
+		//'pageReverse' property holds the div on the reverse side of the page
 		for( var i = 0, len = PDFPages.length; i < len; i++ ){
 			this.flips.push({
 				//Current progress of the flip left -1 to right +1
@@ -39,6 +42,8 @@ var PDF_PAGE_FLIP = {
 				target: 1,
 				//The page DOM related to this flip
 				page: PDFPages[i].div,
+				//The page reverse DOM related to this flip
+				//pageReverse: ((i+1)<len)?PDFPages[ i + 1 ].div:null,
 				//True while the page is being dragged
 				dragging: false
 			});
@@ -48,10 +53,10 @@ var PDF_PAGE_FLIP = {
 
 	configure : function (){
 		if( this.flips.length > 0 ){
+			console.log(this.flips);
 			//Assumes dimensions of all pages are the same!
-			console.log(this.flips[0].page.style);
 			//Set page width and height
-			this.flipPageHeight = parseInt(this.flips[0].page.style.height, 10);
+			this.flipPageHeight = parseInt(this.flips[0].page.style.height, 10) + 10;
 			this.flipPageWidth = parseInt(this.flips[0].page.style.width, 10);
 			this.flipPageLeft = parseInt(this.flips[0].page.style.left, 10);
 			//Set book width and height
@@ -66,7 +71,6 @@ var PDF_PAGE_FLIP = {
 			//make the z-index of this canvas +1 the number of pages in the document
 			this.flipCanvas.style.zIndex = this.flips.length;
 			this.flipCanvasContext = this.flipCanvas.getContext('2d');
-			console.log(this.flipCanvasContext);
 
 			this.flipCanvas.width = this.flipBookWidth;//this.flipBookWidth + (this.CANVAS_PADDING * 2);
 			this.flipCanvas.height = this.flipBookHeight;//this.flipBookHeight + (this.CANVAS_PADDING * 2);
@@ -75,6 +79,23 @@ var PDF_PAGE_FLIP = {
 			this.flipCanvas.style.left = parseInt(this.flips[0].page.style.left, 10) - this.flipPageWidth + 'px';
 			//Render page flip 60 times a second
 			setInterval( this.render.bind(this), 1000/60 );
+
+			if( this.flips.length > 1) {
+				var oddFlips = [];
+				for( var i = 1, len = this.flips.length; i < len; i = i + 2 ){
+					//Hide this odd numbered page to begin with, it will be progressively shown on the page flip
+					this.flips[i].page.style.opacity = 0;
+					//Fill in this flip DOM into the preceeding index flip as pageReverse
+					this.flips[i-1].pageReverse = this.flips[i].page;
+					oddFlips.push(i);
+				}
+				//Now we remove every off flip from flips array
+				while ( oddFlips.length ){
+					this.flips.splice( oddFlips.pop(), 1 );
+				}
+			}
+			console.log(this.flips);
+
 			//add event listeners to document
 			document.addEventListener( "mousemove", this.mouseMoveHandler.bind(this), false );
 		        document.addEventListener( "mousedown", this.mouseDownHandler.bind(this) , false );
@@ -88,7 +109,6 @@ var PDF_PAGE_FLIP = {
                 this.mouse.y = event.clientY;
 	},
 	mouseDownHandler : function( event ){
-		console.log(this.mouse.x);
 		// Make sure the mouse pointer is inside of the book
                 if (Math.abs(this.mouse.x) < parseInt(this.flips[0].page.style.left, 10)) {
                         if (this.mouse.x < 0 && this.page - 1 >= 0) {
@@ -170,15 +190,15 @@ var PDF_PAGE_FLIP = {
 		flip.page.style.width = Math.max(foldX - 10, 0) + "px";
 		
 		this.flipCanvasContext.save();
-		this.flipCanvasContext.translate( /*this.CANVAS_PADDING*/ + ( this.flipBookWidth / 2 ), this.flipPageY); //+ this.CANVAS_PADDING );
+		this.flipCanvasContext.translate( /*this.CANVAS_PADDING*/ + ( this.flipBookWidth / 2 ), this.flipPageY+10); //+ this.CANVAS_PADDING );
 		
 		
 		// Draw a sharp shadow on the left side of the page
 		this.flipCanvasContext.strokeStyle = 'rgba(0,0,0,'+(0.05 * strength)+')';
 		this.flipCanvasContext.lineWidth = 30 * strength;
 		this.flipCanvasContext.beginPath();
-		this.flipCanvasContext.moveTo(foldX - foldWidth, -verticalOutdent * 0.5);
-		this.flipCanvasContext.lineTo(foldX - foldWidth, this.flipPageHeight + (verticalOutdent * 0.5));
+		this.flipCanvasContext.moveTo(foldX - foldWidth, (-verticalOutdent * 0.5)+10);
+		this.flipCanvasContext.lineTo(foldX - foldWidth, this.flipPageHeight + (verticalOutdent * 0.5)+10);
 		this.flipCanvasContext.stroke();
 		
 		
@@ -223,6 +243,7 @@ var PDF_PAGE_FLIP = {
 		
 		// Draw the folded piece of paper
 		this.flipCanvasContext.beginPath();
+		//this.flipCanvasContext.fillStyle = 'orange';
 		this.flipCanvasContext.moveTo(foldX, 0);
 		this.flipCanvasContext.lineTo(foldX, this.flipPageHeight);
 		this.flipCanvasContext.quadraticCurveTo(foldX, this.flipPageHeight + (verticalOutdent * 2), foldX - foldWidth, this.flipPageHeight + verticalOutdent);
