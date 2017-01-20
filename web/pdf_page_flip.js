@@ -68,8 +68,8 @@ var PDF_PAGE_FLIP = {
 
 			//Resize the canvas to match book size
 			this.flipCanvas = document.getElementById('pageflip');
-			//make the z-index of this canvas +1 the number of pages in the document
-			this.flipCanvas.style.zIndex = this.flips.length;
+			//make the z-index of this canvas 2wice the number of pages in the document
+			this.flipCanvas.style.zIndex = 2*this.flips.length;
 			this.flipCanvasContext = this.flipCanvas.getContext('2d');
 
 			this.flipCanvas.width = this.flipBookWidth;//this.flipBookWidth + (this.CANVAS_PADDING * 2);
@@ -188,6 +188,16 @@ var PDF_PAGE_FLIP = {
 		
 		// Change page element width to match the x position of the fold
 		flip.page.style.width = Math.max(foldX - 10, 0) + "px";
+
+		//Showing the reverse of the flip page.
+                //First clear opacity value on flip pageReverse
+                flip.pageReverse.style.opacity = 1;
+                //Increase the z-index of this pageReverse by +1 the z-index of flip.page
+                flip.pageReverse.style.zIndex = flip.page.style.zIndex + 1;
+                //Adjust the left css property to align pageReverse DOM with folded piece of papaer
+                flip.pageReverse.style.left = parseInt( (foldX + this.flipPageWidth) - foldWidth, 10 ) + 'px';
+                //Adjust the width of this pageReverse DOM to follow the with of the fold
+                flip.pageReverse.style.width = parseInt( foldWidth, 10 ) + 'px';
 		
 		this.flipCanvasContext.save();
 		this.flipCanvasContext.translate( /*this.CANVAS_PADDING*/ + ( this.flipBookWidth / 2 ), this.flipPageY+10); //+ this.CANVAS_PADDING );
@@ -249,7 +259,7 @@ var PDF_PAGE_FLIP = {
 		this.flipCanvasContext.quadraticCurveTo(foldX, this.flipPageHeight + (verticalOutdent * 2), foldX - foldWidth, this.flipPageHeight + verticalOutdent);
 		this.flipCanvasContext.lineTo(foldX - foldWidth, -verticalOutdent);
 		this.flipCanvasContext.quadraticCurveTo(foldX, -verticalOutdent * 2, foldX, 0);
-		
+
 		this.flipCanvasContext.fill();
 		this.flipCanvasContext.stroke();
 		
